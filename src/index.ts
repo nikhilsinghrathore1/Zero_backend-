@@ -164,12 +164,20 @@ function formatProofData(file: Express.Multer.File | undefined, textProof: strin
 // Route to submit proof for a specific task (supports file upload, URL, or text)
 app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) => {
   const { taskId } = req.params;
-  const { userAddress, textProof, urlProof } = req.body;
+  const userAddress = req.body?.userAddress;
+  const textProof = req.body?.textProof;
+  const urlProof = req.body?.urlProof;
+  console.log(req.body)
+
+  // console.log("taskid", taskId)
+  // console.log("useraddress" , userAddress)
   const file = req.file;
 
   if (!taskId || !userAddress) {
     return res.status(400).json({ error: 'Missing required fields: taskId and userAddress' });
   }
+  
+  
 
   // Check if at least one proof type is provided
   if (!file && !textProof && !urlProof) {
@@ -227,6 +235,45 @@ app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) 
     }
     
     return res.status(500).json({ error: 'Failed to submit proof' });
+  }
+});
+
+// NEW ROUTE: Update verified field for a task
+app.patch('/verify-task/:taskId', async (req, res) => {
+  const { taskId } = req.params;
+  const { verified } = req.body;
+
+  // Validate required fields
+  if (!taskId) {
+    return res.status(400).json({ error: 'Missing required field: taskId' });
+  }
+
+  if (typeof verified !== 'boolean') {
+    return res.status(400).json({ error: 'Verified field must be a boolean value (true or false)' });
+  }
+
+  try {
+    // Check if the task exists
+    const existingTask = await db.select().from(tasktable).where(eq(tasktable.Taskid, parseInt(taskId)));
+    
+    if (existingTask.length === 0) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Update the verified field
+    const updatedTask = await db
+      .update(tasktable)
+      .set({ verified: verified })
+      .where(eq(tasktable.Taskid, parseInt(taskId)))
+      .returning();
+
+    return res.status(200).json({ 
+      message: `Task ${verified ? 'verified' : 'unverified'} successfully`, 
+      task: updatedTask[0]
+    });
+  } catch (err) {
+    console.error('Error updating task verification:', err);
+    return res.status(500).json({ error: 'Failed to update task verification' });
   }
 });
 
