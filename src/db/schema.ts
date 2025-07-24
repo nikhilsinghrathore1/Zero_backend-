@@ -1,10 +1,30 @@
-import { integer, pgTable, varchar, timestamp, numeric } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  pgTable,
+  varchar,
+  timestamp,
+  numeric,
+  text,
+} from "drizzle-orm/pg-core";
 
-export const usersTable = pgTable("users", {
-  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+// TASK TABLE
+export const tasktable = pgTable("Tasks", {
+  Taskid: integer().primaryKey().generatedAlwaysAsIdentity(),
   title: varchar({ length: 255 }).notNull(),
-  description: varchar({ length: 255 }), // optional: add length
+  description: varchar({ length: 255 }),
   deadline: timestamp(),
-  staked_amount: numeric(), // allows decimal values
-  userAddress: varchar({ length: 255 }) // fixed from `string()` to `varchar()`
+  staked_amount: numeric(),
+  userAddress: varchar({ length: 255 }),
+  proof: text(),
+  verified: boolean().default(false),
+});
+
+// USERS TABLE
+export const usersTable = pgTable("user", {
+  userId: integer().primaryKey().generatedAlwaysAsIdentity(),
+  userAddress: varchar({ length: 255 }).notNull().unique(),
+  badges: text().array(), // ✅ correct array syntax for pg-core
+  streak: integer(),
+  total_spent: numeric(),
 });
