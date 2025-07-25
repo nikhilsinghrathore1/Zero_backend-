@@ -12,6 +12,7 @@ const cors_1 = __importDefault(require("cors"));
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const promises_1 = __importDefault(require("fs/promises"));
+const port = process.env.PORT || 3001;
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 app.use((0, cors_1.default)({ origin: '*' }));
@@ -62,19 +63,28 @@ const upload = (0, multer_1.default)({
 const db = (0, neon_http_1.drizzle)(process.env.DATABASE_URL);
 // Route to create a new task
 app.post('/create-task', async (req, res) => {
-    const { title, description, deadline, staked_amount, userAddress } = req.body;
-    if (!title || !userAddress || !staked_amount) {
-        return res.status(400).json({ error: 'Missing required fields' });
+    console.log("create task route called");
+    const { Taskid, title, description, deadline, staked_amount, userAddress } = req.body;
+    // Updated validation to include Taskid
+    if (!Taskid || !title || !userAddress || !staked_amount) {
+        return res.status(400).json({ error: 'Missing required fields: Taskid, title, userAddress, and staked_amount are required' });
     }
+    console.log(req.body);
     try {
+        // Check if task with this Taskid already exists
+        const existingTask = await db.select().from(schema_1.tasktable).where((0, drizzle_orm_1.eq)(schema_1.tasktable.Taskid, Taskid));
+        if (existingTask.length > 0) {
+            return res.status(409).json({ error: 'Task with this ID already exists' });
+        }
         const task = {
+            Taskid, // Now required from frontend
             title,
             description,
             deadline: deadline ? new Date(deadline) : undefined,
             staked_amount: staked_amount.toString(),
             userAddress,
         };
-        const result = await db.insert(schema_1.tasktable).values(task).returning(); // ✅ Use tasktable and return inserted data
+        const result = await db.insert(schema_1.tasktable).values(task).returning();
         return res.status(201).json({ message: 'Task created successfully', task: result[0] });
     }
     catch (err) {
@@ -89,7 +99,7 @@ app.get('/tasks/:userAddress', async (req, res) => {
         return res.status(400).json({ error: 'Missing userAddress' });
     }
     try {
-        const tasks = await db.select().from(schema_1.tasktable).where((0, drizzle_orm_1.eq)(schema_1.tasktable.userAddress, userAddress)); // ✅ Use tasktable
+        const tasks = await db.select().from(schema_1.tasktable).where((0, drizzle_orm_1.eq)(schema_1.tasktable.userAddress, userAddress));
         return res.status(200).json({ tasks });
     }
     catch (err) {
@@ -104,6 +114,11 @@ app.post('/create-user', async (req, res) => {
         return res.status(400).json({ error: 'Missing userAddress' });
     }
     try {
+        // Check if user already exists
+        const existingUser = await db.select().from(schema_1.usersTable).where((0, drizzle_orm_1.eq)(schema_1.usersTable.userAddress, userAddress));
+        if (existingUser.length > 0) {
+            return res.status(409).json({ error: 'User already exists', user: existingUser[0] });
+        }
         const user = {
             userAddress,
             badges: [],
@@ -160,8 +175,6 @@ app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) 
     const textProof = req.body?.textProof;
     const urlProof = req.body?.urlProof;
     console.log(req.body);
-    // console.log("taskid", taskId)
-    // console.log("useraddress" , userAddress)
     const file = req.file;
     if (!taskId || !userAddress) {
         return res.status(400).json({ error: 'Missing required fields: taskId and userAddress' });
@@ -216,7 +229,7 @@ app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) 
         return res.status(500).json({ error: 'Failed to submit proof' });
     }
 });
-// NEW ROUTE: Update verified field for a task
+// Route to update verified field for a task
 app.patch('/verify-task/:taskId', async (req, res) => {
     const { taskId } = req.params;
     const { verified } = req.body;
@@ -282,8 +295,8 @@ app.get('/user/:userAddress', async (req, res) => {
         return res.status(500).json({ error: 'Failed to fetch user' });
     }
 });
-app.listen(3000, async () => {
+app.listen(port, async () => {
     // Ensure uploads directory exists when server starts
     await ensureUploadsDirectory();
-    console.log('Server running on port 3000');
+    console.log('Server running on port ', port);
 });

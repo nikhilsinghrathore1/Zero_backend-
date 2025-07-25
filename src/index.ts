@@ -8,6 +8,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 
+const port = process.env.PORT || 3001
+
 const app = express();
 
 app.use(express.json());
@@ -63,14 +65,26 @@ const db = drizzle(process.env.DATABASE_URL!);
 
 // Route to create a new task
 app.post('/create-task', async (req, res) => {
-  const { title, description, deadline, staked_amount, userAddress } = req.body;
+  console.log("create task route called"); 
+  const { Taskid, title, description, deadline, staked_amount, userAddress } = req.body;
 
-  if (!title || !userAddress || !staked_amount) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  // Updated validation to include Taskid
+  if (!Taskid || !title || !userAddress || !staked_amount) {
+    return res.status(400).json({ error: 'Missing required fields: Taskid, title, userAddress, and staked_amount are required' });
   }
-
+  
+  console.log(req.body);
+  
   try {
-    const task: typeof tasktable.$inferInsert = { // ✅ Use tasktable instead of usersTable
+    // Check if task with this Taskid already exists
+    const existingTask = await db.select().from(tasktable).where(eq(tasktable.Taskid, Taskid));
+    
+    if (existingTask.length > 0) {
+      return res.status(409).json({ error: 'Task with this ID already exists' });
+    }
+
+    const task: typeof tasktable.$inferInsert = { 
+      Taskid, // Now required from frontend
       title,
       description,
       deadline: deadline ? new Date(deadline) : undefined,
@@ -78,7 +92,7 @@ app.post('/create-task', async (req, res) => {
       userAddress,
     };
 
-    const result = await db.insert(tasktable).values(task).returning(); // ✅ Use tasktable and return inserted data
+    const result = await db.insert(tasktable).values(task).returning();
     return res.status(201).json({ message: 'Task created successfully', task: result[0] });
   } catch (err) {
     console.error('Error inserting task:', err);
@@ -95,7 +109,7 @@ app.get('/tasks/:userAddress', async (req, res) => {
   }
 
   try {
-    const tasks = await db.select().from(tasktable).where(eq(tasktable.userAddress, userAddress)); // ✅ Use tasktable
+    const tasks = await db.select().from(tasktable).where(eq(tasktable.userAddress, userAddress));
     return res.status(200).json({ tasks });
   } catch (err) {
     console.error('Error fetching tasks:', err);
@@ -112,6 +126,13 @@ app.post('/create-user', async (req, res) => {
   }
 
   try {
+    // Check if user already exists
+    const existingUser = await db.select().from(usersTable).where(eq(usersTable.userAddress, userAddress));
+    
+    if (existingUser.length > 0) {
+      return res.status(409).json({ error: 'User already exists', user: existingUser[0] });
+    }
+
     const user: typeof usersTable.$inferInsert = {
       userAddress,
       badges: [],
@@ -167,17 +188,13 @@ app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) 
   const userAddress = req.body?.userAddress;
   const textProof = req.body?.textProof;
   const urlProof = req.body?.urlProof;
-  console.log(req.body)
+  console.log(req.body);
 
-  // console.log("taskid", taskId)
-  // console.log("useraddress" , userAddress)
   const file = req.file;
 
   if (!taskId || !userAddress) {
     return res.status(400).json({ error: 'Missing required fields: taskId and userAddress' });
   }
-  
-  
 
   // Check if at least one proof type is provided
   if (!file && !textProof && !urlProof) {
@@ -238,7 +255,7 @@ app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) 
   }
 });
 
-// NEW ROUTE: Update verified field for a task
+// Route to update verified field for a task
 app.patch('/verify-task/:taskId', async (req, res) => {
   const { taskId } = req.params;
   const { verified } = req.body;
@@ -317,8 +334,8 @@ app.get('/user/:userAddress', async (req, res) => {
   }
 });
 
-app.listen(3000, async () => {
+app.listen(port, async () => {
   // Ensure uploads directory exists when server starts
   await ensureUploadsDirectory();
-  console.log('Server running on port 3000');
+  console.log('Server running on port ', port);
 });
