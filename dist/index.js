@@ -168,6 +168,9 @@ function formatProofData(file, textProof, urlProof) {
     }
     return null;
 }
+app.get("/health", (req, res) => {
+    res.send("healthy server");
+});
 // Route to submit proof for a specific task (supports file upload, URL, or text)
 app.patch('/submit-proof/:taskId', upload.single('proofFile'), async (req, res) => {
     const { taskId } = req.params;
